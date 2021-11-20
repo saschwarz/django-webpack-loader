@@ -1,16 +1,16 @@
 import json
-import time
 import os
+import time
 from io import open
 
 from django.conf import settings
 from django.contrib.staticfiles.storage import staticfiles_storage
 
 from .exceptions import (
+    WebpackBundleLookupError,
     WebpackError,
     WebpackLoaderBadStatsError,
     WebpackLoaderTimeoutError,
-    WebpackBundleLookupError
 )
 
 
@@ -28,8 +28,8 @@ class WebpackLoader(object):
         except IOError:
             raise IOError(
                 'Error reading {0}. Are you sure webpack has generated '
-                'the file and the path is correct?'.format(
-                    self.config['STATS_FILE']))
+                'the file and the path is correct?'.format(self.config['STATS_FILE'])
+            )
 
     def get_assets(self):
         if self.config['CACHE']:
@@ -42,8 +42,11 @@ class WebpackLoader(object):
         filtered_chunks = []
 
         for chunk in chunks:
-            ignore = any(regex.match(chunk)
-                         for regex in self.config['ignores'])
+            ignore = any(
+                # chunk is a dict
+                regex.match(chunk.get('name'))
+                for regex in self.config['ignores']
+            )
             if not ignore:
                 filtered_chunks.append(chunk)
 
@@ -55,7 +58,7 @@ class WebpackLoader(object):
 
         for chunk in chunks:
             url = self.get_chunk_url(files[chunk])
-            yield { 'name': chunk, 'url': url }
+            yield {'name': chunk, 'url': url}
 
     def get_chunk_url(self, chunk_file):
         public_path = chunk_file.get('publicPath')
@@ -92,14 +95,18 @@ class WebpackLoader(object):
         if assets.get('status') == 'done':
             chunks = assets['chunks'].get(bundle_name, None)
             if chunks is None:
-                raise WebpackBundleLookupError('Cannot resolve bundle {0}.'.format(bundle_name))
+                raise WebpackBundleLookupError(
+                    'Cannot resolve bundle {0}.'.format(bundle_name)
+                )
 
             filtered_chunks = self.filter_chunks(chunks)
 
             for chunk in filtered_chunks:
                 asset = assets['assets'][chunk]
                 if asset is None:
-                    raise WebpackBundleLookupError('Cannot resolve asset {0}.'.format(chunk))
+                    raise WebpackBundleLookupError(
+                        'Cannot resolve asset {0}.'.format(chunk)
+                    )
 
             return self.map_chunk_files_to_url(filtered_chunks)
 
@@ -113,10 +120,13 @@ class WebpackLoader(object):
             error = u"""
             {error} in {file}
             {message}
-            """.format(**assets)
+            """.format(
+                **assets
+            )
             raise WebpackError(error)
 
         raise WebpackLoaderBadStatsError(
             "The stats file does not contain valid data. Make sure "
             "webpack-bundle-tracker plugin is enabled and try to run "
-            "webpack again.")
+            "webpack again."
+        )
